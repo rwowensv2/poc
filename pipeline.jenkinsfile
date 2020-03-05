@@ -1,0 +1,48 @@
+pipeline {
+   agent any
+
+   stages {
+      stage('Code Checkout') {
+         steps {
+            echo 'Cleaning workspace...'
+            cleanWs()
+            script{
+                try{
+                    git credentialsId: 'GitHub', url: 'https://github.com/rwowensv2/poc.git', branch: 'master'
+                }
+                catch(err){
+                    error "GitHub checkout failed"
+                    current.BuildResult = "FAILED"
+                }
+            }
+         }
+      }
+      stage('Stop containers') {
+         steps {
+            echo 'Stopping containers...'
+            script {
+               catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                  sh "/bin/sudo /bin/docker container stop web"
+                  sh "/bin/sudo /bin/docker container rm web"                  
+               } 
+            }
+            echo currentBuild.result
+         }
+      }
+      stage('Deploy Nginx') {
+         steps {
+            echo 'Docker Run'
+            script {
+               try {
+                  sh "/bin/sudo /usr/bin/docker build -t poc_web ."
+                  sh "/bin/sudo /usr/bin/docker run --name web -d -p 80:80 poc_web:latest"
+               }
+              catch(err){
+                 error "New Container Failed"
+                 current.BuildResult = "FAILED"
+              }
+            }
+         }
+      }
+   }
+}
